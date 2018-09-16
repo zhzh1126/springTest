@@ -11,6 +11,7 @@ import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
 import java.net.URL;
+import java.net.URLDecoder;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -24,7 +25,7 @@ public class DispatcherServlet extends HttpServlet {
     ArrayList<String> classNameList = new ArrayList<>();
     ArrayList<Handler> handlerList = new ArrayList<>();
     @Override
-    public void init(ServletConfig config) throws ServletException {
+    public void init(ServletConfig config)  {
         //读取配置
         doLoadConfig(config);
         //通过解析配置文件中的内容，扫描出所有的类
@@ -89,8 +90,10 @@ public class DispatcherServlet extends HttpServlet {
             try {
                 Class<?> clazz = Class.forName(className);
                 //只初始化有ZZController 和 ZZService 注解的类
-                if(clazz.isAnnotationPresent(ZZController.class)||clazz.isAnnotationPresent(ZZService.class)){
-                    iocObjectMap.put(lowerFirstCase(clazz.getSimpleName()),clazz.newInstance());
+                if(clazz.isAnnotationPresent(ZZController.class)){
+                    String simpleName = clazz.getSimpleName();
+                    String  keyName = lowerFirstCase(simpleName);
+                    iocObjectMap.put(keyName,clazz.newInstance());
 
                 }else if (clazz.isAnnotationPresent(ZZService.class)){
                     ZZService service = clazz.getAnnotation(ZZService.class);
@@ -100,7 +103,7 @@ public class DispatcherServlet extends HttpServlet {
                         //问题：这里为什么要用simpleName,为什么不用包全名？这样如果类名相同的话，会导致只有一个类对象
                         serviceName = lowerFirstCase(clazz.getSimpleName());
                     }
-                    iocObjectMap.put(lowerFirstCase(serviceName),object);
+                    iocObjectMap.put(serviceName,object);
                     Class<?>[] interfaces = clazz.getInterfaces();
                     for (Class<?> inter:interfaces) {
                        iocObjectMap.put(inter.getName(),object);
@@ -133,14 +136,21 @@ public class DispatcherServlet extends HttpServlet {
     }
 
 
-    private void doScan(String packagePath) {
+    private void doScan(String packagePath)  {
        // packagePath = packagePath.replaceAll("\\.",File.separator);
         String temp =  packagePath.replaceAll("\\.","\\"+File.separator);
         URL url =  this.getClass().getClassLoader().getResource(temp);
         //test dubbger测试一下这里url.getFile()的返回值最后有没有“/”
         String  urlString = url.getFile();
-       // File classDir = new File("D:/IDE/Workspaces/IDEA/springTest/target/classes/com%5czz%5cdemo");
-        File classDir = new File(urlString);
+        String decodeUrlString = "";
+        try {
+            decodeUrlString = URLDecoder.decode(urlString, "utf-8");
+            System.out.println(decodeUrlString);
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+      //  File classDir = new File("/D:/IDE/Workspaces/IDEA/springTest/target/classes/com/zz/demo");
+        File classDir = new File(decodeUrlString);
         System.out.println(classDir.list());
         File[] files = classDir.listFiles();
         for(File file:classDir.listFiles()){
@@ -160,7 +170,7 @@ public class DispatcherServlet extends HttpServlet {
     private String   lowerFirstCase(String string){
         char[] chars = string.toCharArray();
         chars[0]+=32;
-        return  chars.toString();
+        return  String.valueOf(chars);
     }
 
     private class Handler {
@@ -169,10 +179,10 @@ public class DispatcherServlet extends HttpServlet {
         private Object controller;
         private Map<String,Integer> paramIndexMapping ;//参数顺序
 
-        public Handler(Pattern pattern, Method method, Object controller) {
+        public Handler(Pattern pattern, Method method, Object obj) {
             this.pattern = pattern;
             this.method = method;
-            controller = controller;
+            this.controller = obj;
             this.paramIndexMapping = new HashMap<>();
             putParamIndexMappingn(method);
         }
@@ -205,12 +215,12 @@ public class DispatcherServlet extends HttpServlet {
             }
 
             //获取其他参数的index
-            Parameter[] parameters = method.getParameters();
+            /*Parameter[] parameters = method.getParameters();
             for (int i = 0;i<parameters.length;i++){
                 //排除已存在的index
                 if(!paramIndexMapping.containsValue(i))
                     paramIndexMapping.put(parameters[i].getName(),i);
-            }
+            }*/
         }
 
         public Pattern getPattern() {
@@ -293,7 +303,9 @@ public class DispatcherServlet extends HttpServlet {
         return  value;
     }
     private Handler getHandlerByReq(HttpServletRequest req) {
-        String url  = req.getServletPath();
+
+        String url = req.getRequestURI().replaceFirst(req.getContextPath(),"");
+
         for (Handler handler: handlerList ) {
             Matcher matcher = handler.pattern.matcher(url);
             if(matcher.matches()){

@@ -3,9 +3,7 @@ package com.zz.demo.controller;
 
 
 import com.zz.demo.service.DemoService;
-import com.zz.mvcframework.annotation.ZZAutowired;
-import com.zz.mvcframework.annotation.ZZController;
-import com.zz.mvcframework.annotation.ZZRequestMapping;
+import com.zz.mvcframework.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
@@ -22,7 +20,7 @@ public class DemoController {
     private DemoService demoService;
 
     @ZZRequestMapping("/query.json")
-    public void query(HttpServletRequest req, HttpServletResponse res,String name){
+    public void query(HttpServletRequest req, HttpServletResponse res, @ZZRequestParam(name="name") String name){
 
         try {
             res.getWriter().print(demoService.get(name));
